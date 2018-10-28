@@ -14,6 +14,7 @@ string color_name[7] = { "RED", "ORGANE", "YELLOW", "GREEN", "SKY", "BLUE", "PUR
 #define PLAY  0
 #define GEN   1
 
+#define VIDEOFILE "sample_video/bird_10.mp4"
 double Distance(const Point& p1, const Point& p2) {
 
 	double distance;
@@ -292,7 +293,7 @@ int purple_eps = 30;
 
 
 
-void find_shapes_from_contours(Mat col[], shape shapes[], Mat &img, Mat &img2, int mode)
+void find_shapes_from_contours(Mat col[7], shape shapes[7], Mat &img, Mat &img2, int mode)
 {
 
 	int shape_eps[7] = { red_eps, orange_eps, yellow_eps, green_eps, sky_eps, blue_eps, purple_eps };
@@ -300,19 +301,17 @@ void find_shapes_from_contours(Mat col[], shape shapes[], Mat &img, Mat &img2, i
 	vector<vector<Point>>cont[8]; //cont[0]-red, cont[1]-orange, cont[2]-yellow, cont[3]-green, cont[4]-sky, cont[5]-blue, cont[6]-purple
 	vector<Vec4i>hierarchy;
 
-
 	// Find contour 
-	for (int i = 0; i < 8; i++){
-		findContours(col[i], cont[i], hierarchy, CV_RETR_TREE, CHAIN_APPROX_NONE, Point(0, 0));
+	for (int i = 0; i < 7; i++){
+		//Canny(col[i], col[i], 100, 255);
+		findContours(col[i], cont[i], hierarchy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE, Point(0, 0));
 	}
 
 	for (int i = 0; i < 7; i++)
 		shapes[i].init();
 
-
 	for (int shape_id = 0; shape_id < 7; shape_id++)
 	{
-
 		int max = 0, maxidx = 0;
 
 		if (cont[shape_id].size() > 0)
@@ -326,36 +325,35 @@ void find_shapes_from_contours(Mat col[], shape shapes[], Mat &img, Mat &img2, i
 				}
 			}
 
-			if (contourArea((cont[shape_id])[maxidx]) > consize)
+			if (contourArea((cont[shape_id])[maxidx]) >= consize)
 			{
 				vector<Point> app;
 
 				shapes[shape_id].plag = 1;
-				approxPolyDP((cont[shape_id])[maxidx], app, shape_eps[shape_id], false);
-				//drawContours(img2, cont[0], maxidx, 0);
-				//drawContours(img2, vector<vector<Point>>(1, app), 0, Scalar(0, 0, 255), 4);
+				//approxPolyDP((cont[shape_id])[maxidx], app, shape_eps[shape_id], false);
+				approxPolyDP((cont[shape_id])[maxidx], app, 30, false);
 				if (app.size() == 4 && (shape_id < 4 || shape_id == 5))
 				{
-					drawContours(img2, vector<vector<Point>>(1, app), 0, Scalar(0, 0, 255), 4);
+					drawContours(img2, vector<vector<Point>>(1, app), 0, Scalar(100, 0, 125), 3);
 					shapes[shape_id].getPoints(app[0], app[1], app[2]);
 					if (mode == GEN) {
 						putText(img, color_name[shape_id], shapes[shape_id].wp, 1, 1, Scalar(0, 0, 0));
 						char msg[256];
 						sprintf(msg, "%.0lf", shapes[shape_id].angle);
-						putText(img, msg, shapes[shape_id].wp + Point(0, 10), 1, 1, Scalar(0, 0, 0));
+						putText(img, msg, shapes[shape_id].wp + Point(0, 15), 1, 1, Scalar(0, 0, 0));
 					}
 				}
 				else if (app.size() == 5 && (shape_id == 4 || shape_id == 6))
 				{
-						shapes[4].getPoints(app[0], app[1], app[2], app[3], 1);
+						shapes[shape_id].getPoints(app[0], app[1], app[2], app[3], 1);
 						drawContours(img2, vector<vector<Point>>(1, app), 0, Scalar(255, 216, 0), 4);
 						if (mode == GEN) {
 							putText(img, color_name[shape_id], shapes[shape_id].wp, 1, 1, Scalar(0, 0, 0));
 							if (shape_id == 4 && shapes[4].flip)
-								putText(img, "Flip", shapes[4].wp - Point(0, 10), 1, 1, Scalar(0, 0, 255));
-							char b[256];
-							sprintf(b, "%0.0lf", shapes[shape_id].angle);
-							putText(img, b, shapes[shape_id].wp + Point(0, 10), 1, 1, Scalar(0, 0, 0));
+								putText(img, "Flip", shapes[4].wp - Point(0, 15), 1, 1, Scalar(0, 0, 255));
+							char msg[256];
+							sprintf(msg, "%.0lf", shapes[shape_id].angle);
+							putText(img, msg, shapes[shape_id].wp + Point(0, 15), 1, 1, Scalar(0, 0, 0));
 						}
 				}
 			}
@@ -404,7 +402,7 @@ void get_shape_features(shape shapes[], double length[], double shapeangle[])
 	return;
 }
 
-Mat get_transform_matrix(Point boundary[], Size &warpSize)
+Mat get_transform_matrix(Point boundary[4], Size &warpSize)
 {
 	vector<Point2f> corners(4);
 
@@ -423,20 +421,22 @@ Mat get_transform_matrix(Point boundary[], Size &warpSize)
 	return trans;
 }
 
-void split_puzzle_by_color(Mat & frame, Mat col[])
+void split_puzzle_by_color(Mat & hsvframe, Mat col[])
 {
-	inRange(frame, Scalar(162, 128, 0), Scalar(179, 255, 255), col[0]); //red
-	inRange(frame, Scalar(0, 134, 0), Scalar(21, 255, 255), col[1]); // orange
-	inRange(frame, Scalar(21, 70, 0), Scalar(38, 255, 255), col[2]); // yellow
-	inRange(frame, Scalar(54, 84, 0), Scalar(97, 255, 255), col[3]); // green
-	inRange(frame, Scalar(99, 126, 0), Scalar(102, 229, 255), col[4]); // sky blue
-	inRange(frame, Scalar(104, 176, 0), Scalar(132, 255, 255), col[5]); // blue
-	inRange(frame, Scalar(115, 75, 0), Scalar(140, 164, 255), col[6]); // purple
-	inRange(frame, Scalar(0, 37, 0), Scalar(255, 255, 255), col[7]);
+	inRange(hsvframe, Scalar(164, 100, 100), Scalar(180, 255, 255), col[0]); //red
+	inRange(hsvframe, Scalar(12, 100, 100), Scalar(20, 255, 255), col[1]); // orange
+	inRange(hsvframe, Scalar(21, 70, 100), Scalar(34, 255, 255), col[2]); // yellow
+	inRange(hsvframe, Scalar(40, 70, 100), Scalar(70, 255, 255), col[3]); // green
+	inRange(hsvframe, Scalar(85, 70, 100), Scalar(104, 128, 255), col[4]); // sky blue
+	inRange(hsvframe, Scalar(105, 120, 100), Scalar(120, 255, 255), col[5]); // blue
+	inRange(hsvframe, Scalar(120, 60, 100), Scalar(162, 110, 255), col[6]); // purple
+	inRange(hsvframe, Scalar(0, 50, 100), Scalar(255, 255, 255), col[7]);
 }
 
 void play_game(problem problems[], int p_size, Mat &transMat)
 {
+	VideoCapture capture(VIDEOFILE);
+
 	int mode = 0;
 	int random = 1;
 	int custom = 0;
@@ -453,8 +453,6 @@ void play_game(problem problems[], int p_size, Mat &transMat)
 	string modes = to_string(random);
 	modes += ".PNG";
 
-
-
 	Mat hsv, img, frame, range, sum, img2;
 	vector<Mat>channels;
 	vector<Mat>bgr;
@@ -469,8 +467,6 @@ void play_game(problem problems[], int p_size, Mat &transMat)
 	int count = 0;
 	shape shapes[8];
 
-	VideoCapture capture(0);
-
 	while (1)
 	{
 
@@ -479,7 +475,7 @@ void play_game(problem problems[], int p_size, Mat &transMat)
 		capture >> img;
 
 		//Warping
-		warpPerspective(img, img, transMat, warpSize);
+		//warpPerspective(img, img, transMat, warpSize);
 
 		img.copyTo(img2);
 
@@ -534,13 +530,6 @@ void play_game(problem problems[], int p_size, Mat &transMat)
 			imshow("Problem", problem);
 
 		imshow("debug", img2);
-		imshow("red", col2[0]);
-		imshow("orange", col2[1]);
-		imshow("yellow", col2[2]);
-		imshow("green", col2[3]);
-		imshow("sky", col2[4]);
-		imshow("blue", col2[5]);
-		imshow("pur", col2[6]);
 		imshow("Original", img); //show the original image
 
 		merge(channels, hsv);
@@ -574,46 +563,48 @@ void play_game(problem problems[], int p_size, Mat &transMat)
 
 int  make_game_DB(problem problems[], int p_size, Mat &transMat)
 {
-	Mat img, img2, hsv, frame;
-	VideoCapture capture(0);
-	cout << "문제의 이름을 입력하세요" << endl;
-	{
-
-		string inputName;
-
-		cin >> inputName;
+	    Mat img, img2, hsv;
+	    VideoCapture capture(VIDEOFILE);
+	    cout << "문제의 이름을 입력하세요" << endl;
+	
+	    float length_accum[21] = { 0 };
+	    float angle_accum[7] = { 0 };
+	    string inputName;
+	    cin >> inputName;
 		
+		for (int i = 0; i < 21; i++)
+			length_accum[i] = 0;
+		for (int i = 0; i < 7; i++)
+			angle_accum[i] = 0;
+		int count = 0;
+
 		while (1)
 		{
 			capture >> img;
 			vector<Point2f> corners(4);
 
 			//Warping
-			warpPerspective(img, img, transMat, warpSize);
+			//warpPerspective(img, img, transMat, warpSize);
 			img.copyTo(img2);
-			capture >> hsv;
-			cvtColor(hsv, hsv, COLOR_BGR2HSV);
-			cvtColor(img, frame, COLOR_BGR2HSV); //HSV로 영상 이진화
+		
+			//cvtColor(hsv, hsv, COLOR_BGR2HSV);
+			cvtColor(img, hsv, COLOR_BGR2HSV); //HSV로 영상 이진화
 
-			vector<Mat> channels(3), bgr(3);
+			imshow("img", img);
+			//waitKey(0);
+
 			Mat col[8], col2[8];
 
-			split(hsv, channels);
-			split(img, bgr);
+			GaussianBlur(hsv, hsv, Size(3, 3), 1);
 
-			GaussianBlur(frame, frame, Size(3, 3), 1);
-
-			split_puzzle_by_color(frame, col);
-
-			//sum = col[0] + col[1] + col[2] + col[3] + col[4] + col[5] + col[6];
+			split_puzzle_by_color(hsv, col);
 
 			Mat Kernel = getStructuringElement(MORPH_ELLIPSE, Size(3,3));
 
-			//GaussianBlur(col[4], col[4], Size(9, 9), 1);
-
 			//침식, 팽창
-			for (int i = 0; i < 8; i++) {
+			for (int i = 0; i < 8; i++) {  
 				erode(col[i], col[i], Kernel, Point(-1, -1), 1, BORDER_CONSTANT, morphologyDefaultBorderValue());
+				dilate(col[i], col[i], Kernel, Point(-1, -1), 1, BORDER_CONSTANT, morphologyDefaultBorderValue());
 				dilate(col[i], col[i], Kernel, Point(-1, -1), 1, BORDER_CONSTANT, morphologyDefaultBorderValue());
 				col[i].copyTo(col2[i]);
 			}
@@ -621,36 +612,29 @@ int  make_game_DB(problem problems[], int p_size, Mat &transMat)
 			//컨투어 찾기
 			shape shapes[7];
 			find_shapes_from_contours(col, shapes, img, img2, GEN);
-
+			
+			for (int i = 0; i < 7; i++) {
+				//Point2f sz(col2[i].cols/2.0, col2[i].rows/2.0);
+				resize(col2[i], col2[i], Size(0,0), 0.25, 0.25);
+				imshow(color_name[i], col2[i]);
+			}
+			
+		
 			double length[21];
 			double shapeangle[7];
 
 			get_shape_features(shapes, length, shapeangle);
 
-			double tmp = 0.1;
+			//double tmp = 0.1;
+			//
+			//for (int i = 0; i < p_size; i++)
+			//	problems[i].matching(length, shapeangle, tmp);
 
-			for (int i = 0; i < p_size; i++)
-				problems[i].matching(length, shapeangle, tmp);
-
-			if ((shapes[0].plag&&shapes[1].plag&&shapes[2].plag&&shapes[3].plag&&shapes[4].plag&&shapes[5].plag&&shapes[6].plag))
-			{
-			}
-			else
-			{
-				for (int i = 0; i<p_size; i++)
-					problems[i].flag = 0;
-				cout << "Asdasd" << endl;
-			}
-
-			for (int i = 0; i < 4; i++)
-			{
-				if (problems[i].flag)
-					putText(img, problems[i].name, Point(50, 150), 1, 3, Scalar(0, 0, 0));
-			}
-
-			ofstream outFile("output.txt", ios::app);
-			char key = waitKey(1);
-			if (key == 's')
+			char key = waitKey(30);
+	
+			if (key == 'x')
+				break;
+			else if (key == 's' || key == ' ')
 			{
 				if (length[0] > 0.1&&
 					length[1] > 0.1&&
@@ -681,43 +665,51 @@ int  make_game_DB(problem problems[], int p_size, Mat &transMat)
 					shapeangle[5] >= 0 &&
 					shapeangle[6] >= 0)
 				{
-					outFile << endl;
-					outFile.setf(ios::fixed);
-					outFile.precision(2);
-					for (int i = 0; i < 21; i++)
-					{
-						outFile << length[i] << endl;
+					count++;
+					for (int i = 0; i < 21; i++) {
+						length_accum[i] += length[i];
 					}
-					outFile.precision(0);
 					for (int i = 0; i < 7; i++) {
-						outFile << shapeangle[i] << endl;
+						angle_accum[i] += shapeangle[i];
 					}
-					outFile << inputName << endl;
-					outFile << 9999;
 
-					return 0;
+					putText(img2, "Capturing features", Point(20, 50), 1, 3, Scalar(0, 0, 0), 3);
+
+					if (key == 's')
+					{
+						ofstream outFile("problems.txt", ios::app);
+
+						outFile << endl;
+						outFile.setf(ios::fixed);
+						outFile.precision(2);
+						for (int i = 0; i < 21; i++)
+						{
+							outFile << length_accum[i] / count << endl;
+						}
+						outFile.precision(0);
+						for (int i = 0; i < 7; i++) {
+							outFile << angle_accum[i] / count << endl;
+						}
+						outFile << inputName << endl;
+						outFile << 9999 ;
+						outFile.close();
+						break;
+					}
+					for (int i = 0; i < 7; i++)
+						col2[i].release();
 				}
-
 			}
-			outFile.close();
 
-			imshow("asda", img2);
-			imshow("red", col2[0]);
-			imshow("orange", col2[1]);
-			imshow("yellow", col2[2]);
-			imshow("green", col2[3]);
-			imshow("sky", col2[4]);
-			imshow("blue", col2[5]);
-			imshow("pur", col2[6]);
+			imshow("contours", img2);
 			imshow("Original", img); //show the original image
 
-			merge(channels, hsv);
-			merge(bgr, img);
+			for (int i = 0; i < 7; i++)
+				col2[i].release();
 
-			//count++;
-			waitKey(1);
 		}
-	}
+		destroyAllWindows();
+
+		return 0;
 }
 
 Mat get_calibration_points(Point boundary[])
@@ -804,17 +796,40 @@ Mat get_calibration_points(Point boundary[])
 
 Mat init_transMat()
 {
-	boundary[3] = Point(0, 0); // left top
-	boundary[0] = Point(0, 799); // left  bottom
-	boundary[2] = Point(799, 0); // right top
-	boundary[1] = Point(799, 799); // right bottom
+	//vector<Point> inputQuad(4), warpCorners(4);
+
+	// Input Quadilateral or Image plane coordinates
+	Point2f inputQuad[4];
+	// Output Quadilateral or World plane coordinates
+	Point2f outputQuad[4];
+
+	//corners[1] = Point(0, 0); // left top
+	//corners[0] = Point(799, 0); // left  bottom
+	//corners[3] = Point(0, 799); // right top
+	//corners[2] = Point(799, 799); // right bottom
+
+	//warpCorners[1] = Point2f(0, 0);
+	//warpCorners[0] = Point2f(800, 0);
+	//warpCorners[3] = Point2f(0, 800);
+	//warpCorners[2] = Point2f(800, 800);
+
+	inputQuad[0] = Point2f(0, 0);
+	inputQuad[1] = Point2f(800, 0);
+	inputQuad[2] = Point2f(800, 800);
+	inputQuad[3] = Point2f(0, 800);
+	// The 4 points where the mapping is to be done , from top-left in clockwise order
+	outputQuad[0] = Point2f(0, 0);
+	outputQuad[1] = Point2f(800, 0);
+	outputQuad[2] = Point2f(800, 800);
+	outputQuad[3] = Point2f(0, 800);
+
+	Mat lamda = getPerspectiveTransform(inputQuad, outputQuad);
 
 								   // Get the transform Matrix
-	Size warpSize(800, 800);
-	Mat transMat = get_transform_matrix(boundary, warpSize);
-
-	return transMat;
+	cout << lamda;
+	return lamda;
 }
+
 
 int main()
 {
@@ -854,5 +869,50 @@ int main()
 		default: break;
 		}
 	}
+	return 0;
+}
+
+
+int test_perspective_transform()
+{
+	// Input Quadilateral or Image plane coordinates
+	Point2f inputQuad[4];
+	// Output Quadilateral or World plane coordinates
+	Point2f outputQuad[4];
+
+	// Lambda Matrix
+	Mat lambda(2, 4, CV_32FC1);
+	//Input and Output Image;
+	Mat input, output;
+
+	//Load the image
+	input = imread("lenna.jpg", 1);
+	// Set the lambda matrix the same type and size as input
+	output = Mat::zeros(input.rows, input.cols, input.type());
+
+	// The 4 points that select quadilateral on the input , from top-left in clockwise order
+	// These four pts are the sides of the rect box used as input 
+	inputQuad[0] = Point2f(0, 0);
+	inputQuad[1] = Point2f(input.cols-1, 0);
+	inputQuad[2] = Point2f(input.cols-1, input.rows-1);
+	inputQuad[3] = Point2f(0, input.rows-1 );
+	// The 4 points where the mapping is to be done , from top-left in clockwise order
+	outputQuad[0] = Point2f(50, 50);
+	outputQuad[1] = Point2f(input.cols - 1-50, 50);
+	outputQuad[2] = Point2f(input.cols - 1, input.rows - 1);
+	outputQuad[3] = Point2f(0, input.rows - 1);
+
+	// Get the Perspective Transform Matrix i.e. lambda 
+	lambda = getPerspectiveTransform(inputQuad, outputQuad);
+	// Apply the Perspective Transform just found to the src image
+	warpPerspective(input, output, lambda, output.size());
+
+	cout << lambda << endl;
+
+	//Display input and output
+	imshow("Input", input);
+	imshow("Output", output);
+
+	waitKey(0);
 	return 0;
 }
